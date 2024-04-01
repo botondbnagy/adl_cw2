@@ -1,13 +1,10 @@
 from typing import Tuple
-from einops import rearrange
-from timm.models.vision_transformer import VisionTransformer
 from torch import Tensor
 import torch.nn as nn
 import torch
 import torchvision
 import torchvision.transforms as T
 from torch import randn, zeros
-from timm import create_model
 from torch.nn.functional import l1_loss
 from torch.optim import AdamW
 
