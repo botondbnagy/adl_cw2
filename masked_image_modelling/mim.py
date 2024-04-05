@@ -15,28 +15,6 @@ import matplotlib.pyplot as plt
 # Set device
 device = get_device()
 print(f'Using device: {device}, {torch.cuda.get_device_name()}')
-#use GPU to its full potential
-torch.backends.cudnn.benchmark = True
-torch.backends.cudnn.enabled = True
-torch.backends.cudnn.deterministic = False
-torch.backends.cudnn.allow_tf32 = True
-
-# Set random seed for reproducibility
-torch.manual_seed(0)
-torch.cuda.manual_seed(0)
-torch.cuda.manual_seed_all(0)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.enabled = True
-torch.backends.cudnn.allow_tf32 = True
-torch.set_printoptions(precision=10
-                          ,threshold=10000
-                          ,edgeitems=3
-                          ,linewidth=80
-                          ,profile=None
-                          ,sci_mode=False)
-
-
 
 # Define some transformations for the Oxford IIIT Pet dataset
 def tensor_trimap(t):
