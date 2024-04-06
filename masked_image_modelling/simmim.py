@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from einops import repeat
+# from einops import repeat
 
 class SimMIM(nn.Module):
     """
@@ -67,7 +67,8 @@ class SimMIM(nn.Module):
         tokens = tokens + pos_emb
 
         # Prepare mask tokens
-        mask_tokens = repeat(self.mask_token, 'd -> b n d', b = batch, n = num_patches)
+        # mask_tokens = repeat(self.mask_token, 'd -> b n d', b = batch, n = num_patches)
+        mask_tokens = self.mask_token.unsqueeze(0).expand(batch, num_patches, -1)
         mask_tokens = mask_tokens + pos_emb
 
         # Calculate number of masked tokens and create a boolean mask

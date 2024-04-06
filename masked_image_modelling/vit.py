@@ -53,7 +53,12 @@ class Attention(nn.Module):
         x = self.norm(x)
 
         qkv = self.to_qkv(x).chunk(3, dim = -1)
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv)
+        
+        # q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv
+
+        q = qkv[0].reshape(x.shape[0], x.shape[1], self.heads, -1).transpose(1, 2)
+        k = qkv[1].reshape(x.shape[0], x.shape[1], self.heads, -1).transpose(1, 2)
+        v = qkv[2].reshape(x.shape[0], x.shape[1], self.heads, -1).transpose(1, 2)
 
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
 
@@ -61,7 +66,10 @@ class Attention(nn.Module):
         attn = self.dropout(attn)
 
         out = torch.matmul(attn, v)
-        out = rearrange(out, 'b h n d -> b n (h d)')
+        # out = rearrange(out, 'b h n d -> b n (h d)')
+
+        out = out.transpose(1, 2).reshape(x.shape[0], x.shape[1], -1)
+
         return self.to_out(out)
 
 
@@ -106,6 +114,13 @@ class ViT(nn.Module):
             nn.LayerNorm(dim),
         )
 
+        # self.to_patch_embedding = nn.Sequential(
+        #     nn.Unfold(kernel_size=(patch_height, patch_width), stride=(patch_height, patch_width)),
+        #     nn.LayerNorm(patch_dim),
+        #     nn.Linear(patch_dim, dim),
+        #     nn.LayerNorm(dim),
+        # )
+
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
@@ -122,12 +137,20 @@ class ViT(nn.Module):
         x = self.to_patch_embedding(img)
         b, n, _ = x.shape
 
-        cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b = b)
+        # cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b = b)
+        cls_tokens = self.cls_token.expand(b, -1, -1)
+        
+        print(cls_tokens.shape)
+        print(x.shape)
+
+
         x = torch.cat((cls_tokens, x), dim=1)
         x += self.pos_embedding[:, :(n + 1)]
         x = self.dropout(x)
 
+        print(x.shape)
         x = self.transformer(x)
+        print(x.shape)
 
         x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
 
