@@ -8,12 +8,12 @@ from torchvision import datasets
 import torchvision.transforms as T
 
 import time
+import argparse
 import matplotlib.pyplot as plt
 
 # File imports
 from vit import ViT
 from simmim import SimMIM
-from utils import OxfordIIITPetsAugmented, ToDevice, get_device
 
 IMAGENET_DEFAULT_MEAN = torch.tensor([0.485, 0.456, 0.406])
 IMAGENET_DEFAULT_STD = torch.tensor([0.229, 0.224, 0.225])
@@ -31,9 +31,8 @@ transform = T.Compose([
 dataset = datasets.ImageNet(root='./data', split='val', transform=transform)
 train_set, test_set = torch.utils.data.random_split(dataset, [45000, 5000])
 
-
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=500, shuffle=True)
-
+trainloader = torch.utils.data.DataLoader(train_set, batch_size=500, shuffle=True)
+testloader = torch.utils.data.DataLoader(test_set, batch_size=500, shuffle=False)
 
 model = ViT(
     image_size = 128,
@@ -58,11 +57,47 @@ optimizer = optim.AdamW(
 		weight_decay=5e-2
 )
 
+
+def display_reconstructions(testloader, mim):
+    """Display 8 reconstructed patches and their corresponding ground truth patches."""
+    test_images, test_targets = next(iter(testloader))
+    # Evaluate model on test image
+    test_loss, test_pred, test_masks = mim(test_images)
+
+    # Plot an array of 8 masked patches reconstructed
+    fig, axs = plt.subplots(2, 1, figsize=(20, 4))
+
+    pred_patches = test_pred[0].view(-1, 32, 32, 3)
+    mask_patches = test_masks[0].view(-1, 32, 32, 3)
+
+    # Unnormalize
+    pred_patches = pred_patches * IMAGENET_DEFAULT_STD + IMAGENET_DEFAULT_MEAN
+    mask_patches = mask_patches * IMAGENET_DEFAULT_STD + IMAGENET_DEFAULT_MEAN
+
+    # Make grid for plotting
+    test_patches = torchvision.utils.make_grid(pred_patches.permute(0, 3, 1, 2), nrow=8)
+    test_masks = torchvision.utils.make_grid(mask_patches.permute(0, 3, 1, 2), nrow=8)
+
+    # Plot the reconstructed patches
+    axs[0].imshow(test_patches.permute(1, 2, 0).detach().cpu())
+    axs[0].set_title('Reconstructed patches')
+    axs[0].axis('off')
+
+    # Plot the ground truth masks
+    axs[1].imshow(test_masks.permute(1, 2, 0).detach().cpu())
+    axs[1].set_title('Ground truth masks')
+    axs[1].axis('off')
+
+    plt.show()
+
+
+# display_reconstructions(testloader, mim)
+
 n_epochs = 100
 for i in range(n_epochs):
     j = 0
     running_loss = 0.0
-    for images, _ in dataloader:
+    for images, _ in trainloader:
         print(f'Epoch {i} | Batch {j}')
         j += 1
 
@@ -73,4 +108,8 @@ for i in range(n_epochs):
 
         running_loss += loss.item()
 
-    print(f'Epoch {i} - Loss: {running_loss / len(dataloader)}')
+    # display_reconstructions(testloader, mim)
+    print(f'Epoch {i} - Loss: {running_loss / len(trainloader)}')
+
+# Save the model
+torch.save(mim.state_dict(), 'mim.pth')
