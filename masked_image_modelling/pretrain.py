@@ -14,6 +14,11 @@ import matplotlib.pyplot as plt
 # File imports
 from vit import ViT
 from simmim import SimMIM
+from utils import ToDevice, get_device
+
+# Device
+device = get_device()
+print(f'Using device: {device}, {torch.cuda.get_device_name()}')
 
 IMAGENET_DEFAULT_MEAN = torch.tensor([0.485, 0.456, 0.406])
 IMAGENET_DEFAULT_STD = torch.tensor([0.229, 0.224, 0.225])
@@ -31,7 +36,7 @@ transform = T.Compose([
 dataset = datasets.ImageNet(root='./data', split='val', transform=transform)
 train_set, test_set = torch.utils.data.random_split(dataset, [45000, 5000])
 
-trainloader = torch.utils.data.DataLoader(train_set, batch_size=500, shuffle=True)
+trainloader = torch.utils.data.DataLoader(train_set, batch_size=1800, shuffle=True)
 testloader = torch.utils.data.DataLoader(test_set, batch_size=500, shuffle=False)
 
 model = ViT(
@@ -42,7 +47,7 @@ model = ViT(
     depth = 12,
     heads = 8,
     mlp_dim = 384
-)
+).to(device)
 
 # Print number of parameters
 print('Number of parameters:', sum(p.numel() for p in model.parameters()))
@@ -50,7 +55,7 @@ print('Number of parameters:', sum(p.numel() for p in model.parameters()))
 mim = SimMIM(
     encoder = model,
     masking_ratio = 0.5  # they found 50% to yield the best results
-)
+).to(device)
 optimizer = optim.AdamW(
 		params=mim.parameters(),
 		lr=8e-4,
@@ -101,6 +106,7 @@ for i in range(n_epochs):
         print(f'Epoch {i} | Batch {j}')
         j += 1
 
+        images = images.to(device)
         loss, pred, masks = mim(images)
         loss.backward()
         optimizer.step()
@@ -111,5 +117,5 @@ for i in range(n_epochs):
     # display_reconstructions(testloader, mim)
     print(f'Epoch {i} - Loss: {running_loss / len(trainloader)}')
 
-# Save the model
-torch.save(mim.state_dict(), 'mim.pth')
+# Save the encoder
+torch.save(mim.encoder.state_dict(), 'pretrained_encoder.pth')

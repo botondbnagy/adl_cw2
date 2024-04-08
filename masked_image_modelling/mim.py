@@ -62,7 +62,7 @@ testset = OxfordIIITPetsAugmented(
 
 trainloader = torch.utils.data.DataLoader(
 		trainset,
-		batch_size=1024,
+		batch_size=1800,
 		shuffle=True,
 )
 		
@@ -107,7 +107,7 @@ optimizer = optim.AdamW(
 		weight_decay=5e-2
 )
 
-n_epochs = 100
+n_epochs = 20
 for i in range(n_epochs):
     epoch_start = time.time()
     j = 0
@@ -126,6 +126,8 @@ for i in range(n_epochs):
 
     print(f'Epoch {i} - Loss: {running_loss / len(trainloader)} - Time: {time.time() - epoch_start}')
 
+# Save encoder weights
+torch.save(model.state_dict(), 'weights.pth')
 
 test_images, test_targets = next(iter(testloader))
 
