@@ -18,7 +18,7 @@ from utils import ToDevice, get_device
 
 # Device
 device = get_device()
-print(f'Using device: {device}, {torch.cuda.get_device_name()}')
+print(f'Using device: {device}')
 
 IMAGENET_DEFAULT_MEAN = torch.tensor([0.485, 0.456, 0.406])
 IMAGENET_DEFAULT_STD = torch.tensor([0.229, 0.224, 0.225])
@@ -36,17 +36,19 @@ transform = T.Compose([
 dataset = datasets.ImageNet(root='./data', split='val', transform=transform)
 train_set, test_set = torch.utils.data.random_split(dataset, [45000, 5000])
 
-trainloader = torch.utils.data.DataLoader(train_set, batch_size=1800, shuffle=True)
-testloader = torch.utils.data.DataLoader(test_set, batch_size=500, shuffle=False)
+# Load dataset into memory for faster training
+train_set, test_set = list(train_set), list(test_set)
+trainloader = torch.utils.data.DataLoader(train_set, batch_size=64, shuffle=True, num_workers=0)
+testloader = torch.utils.data.DataLoader(test_set, batch_size=64, shuffle=False, num_workers=0)
 
 model = ViT(
     image_size = 128,
-    patch_size = 32,
-    num_classes = 10,
-    dim = 128,
+    patch_size = 16,
+    num_classes = 2,
+    dim = 768,
     depth = 12,
-    heads = 8,
-    mlp_dim = 384
+    heads = 12,
+    mlp_dim = 3072,
 ).to(device)
 
 # Print number of parameters
@@ -58,7 +60,7 @@ mim = SimMIM(
 ).to(device)
 optimizer = optim.AdamW(
 		params=mim.parameters(),
-		lr=8e-4,
+		lr=8e-3,
 		weight_decay=5e-2
 )
 
@@ -66,18 +68,21 @@ optimizer = optim.AdamW(
 def display_reconstructions(testloader, mim):
     """Display 8 reconstructed patches and their corresponding ground truth patches."""
     test_images, test_targets = next(iter(testloader))
+    test_images = test_images.to(device)
     # Evaluate model on test image
     test_loss, test_pred, test_masks = mim(test_images)
 
     # Plot an array of 8 masked patches reconstructed
     fig, axs = plt.subplots(2, 1, figsize=(20, 4))
 
-    pred_patches = test_pred[0].view(-1, 32, 32, 3)
-    mask_patches = test_masks[0].view(-1, 32, 32, 3)
+    patch_size = 16
+
+    pred_patches = test_pred[0].view(-1, patch_size, patch_size, 3).to(device)
+    mask_patches = test_masks[0].view(-1, patch_size, patch_size, 3).to(device)
 
     # Unnormalize
-    pred_patches = pred_patches * IMAGENET_DEFAULT_STD + IMAGENET_DEFAULT_MEAN
-    mask_patches = mask_patches * IMAGENET_DEFAULT_STD + IMAGENET_DEFAULT_MEAN
+    pred_patches = pred_patches * IMAGENET_DEFAULT_STD.to(device) + IMAGENET_DEFAULT_MEAN.to(device)
+    mask_patches = mask_patches * IMAGENET_DEFAULT_STD.to(device) + IMAGENET_DEFAULT_MEAN.to(device)
 
     # Make grid for plotting
     test_patches = torchvision.utils.make_grid(pred_patches.permute(0, 3, 1, 2), nrow=8)
@@ -93,17 +98,20 @@ def display_reconstructions(testloader, mim):
     axs[1].set_title('Ground truth masks')
     axs[1].axis('off')
 
-    plt.show()
+    # plt.show()
+    plt.savefig('reconstructed_patches.png')
 
 
 # display_reconstructions(testloader, mim)
 
-n_epochs = 100
+n_epochs = 1000
 for i in range(n_epochs):
     j = 0
     running_loss = 0.0
+    epoch_start = time.time()
+    print(f'Epoch {i}', end=' ')
     for images, _ in trainloader:
-        print(f'Epoch {i} | Batch {j}')
+        # print(f'Epoch {i} | Batch {j}')
         j += 1
 
         images = images.to(device)
@@ -115,7 +123,10 @@ for i in range(n_epochs):
         running_loss += loss.item()
 
     # display_reconstructions(testloader, mim)
-    print(f'Epoch {i} - Loss: {running_loss / len(trainloader)}')
+    print(f'Epoch {i} - Loss: {running_loss / len(trainloader)} - Time: {time.time() - epoch_start}')
+
+    display_reconstructions(testloader, mim)
+    torch.save(mim.encoder.state_dict(), 'pretrained_encoder.pth')
 
 # Save the encoder
 torch.save(mim.encoder.state_dict(), 'pretrained_encoder.pth')

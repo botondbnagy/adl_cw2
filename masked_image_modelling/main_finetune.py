@@ -33,9 +33,20 @@ if __name__ == '__main__':
 
 	def args_to_dict(**kwargs):
 		return kwargs
+	
+	# Need to normalise images the same way as the pre-trained model
+	IMAGENET_DEFAULT_MEAN = torch.tensor([0.485, 0.456, 0.406])
+	IMAGENET_DEFAULT_STD = torch.tensor([0.229, 0.224, 0.225])
+
+	# Dataset transforms
+	transform = T.Compose([
+		T.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+		T.ToTensor(),
+		T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
+	])
 
 	transform_dict = args_to_dict(
-		pre_transform=T.ToTensor(),
+		pre_transform=transform,
 		pre_target_transform=T.ToTensor(),
 		common_transform=T.Compose([
 			ToDevice(get_device()),
@@ -84,12 +95,12 @@ if __name__ == '__main__':
 	# Instantiate encoder (ViT to be fine-tuned)
 	encoder = ViT(
 		image_size = 128,
-		patch_size = 32,
-		num_classes = 10,
-		dim = 128,
+		patch_size = 16,
+		num_classes = 2,
+		dim = 768,
 		depth = 12,
-		heads = 8,
-		mlp_dim = 384
+		heads = 12,
+		mlp_dim = 3072,
 	).to(device)
 
 	# Print number of parameters
@@ -105,11 +116,11 @@ if __name__ == '__main__':
 	print('Number of parameters (fine-tune model):', sum(p.numel() for p in model.parameters()))
 
 	# Define optimizer and loss function for mlp head
-	optimizer = optim.Adam(model.parameters(), lr=5e-2)
-	criterion = nn.CrossEntropyLoss()
+	optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
+	# criterion = nn.CrossEntropyLoss()
 
 	# Train head only
-	n_epochs = 50
+	n_epochs = 1000
 	for epoch in range(n_epochs):
 		epoch_start = time.time()
 		j = 0 # Batch counter
@@ -129,6 +140,9 @@ if __name__ == '__main__':
 			j += 1
 
 		print(f'Epoch {epoch + 1}/{n_epochs} | Loss: {running_loss / j:.5f} | Time: {time.time() - epoch_start:.2f}s')
+		
+		torch.save(model.state_dict(), f'finetuned_weights.pth')
+		model.display_example(testset, show=False, save=True)
 
 	# Save model
 	torch.save(model.state_dict(), 'finetuned_weights.pth')

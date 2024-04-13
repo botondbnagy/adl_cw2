@@ -4,11 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as T
-import torchvision
 import matplotlib.pyplot as plt
-
-from vit import ViT
-from simmim import SimMIM
 
 
 class FineTune(nn.Module):
@@ -37,8 +33,8 @@ class FineTune(nn.Module):
         self.encoder.load_state_dict(torch.load(weights_path))
 
         # Freeze weights
-        for param in self.encoder.parameters():
-            param.requires_grad = False
+        # for param in self.encoder.parameters():
+        #     param.requires_grad = False
 
         # Get number of patches and encoder dimension
         num_patches, encoder_dim = encoder.pos_embedding.shape[-2:]
@@ -92,15 +88,15 @@ class FineTune(nn.Module):
         
         # pass each patch through the mlp
         mlp_output = self.mlp(encoder_output)
-        pred_patches = mlp_output.reshape(batch, 3, num_patches, -1)
-        mlp_output = mlp_output.reshape(batch, 3, -1)
-        # mlp_output = nn.functional.softmax(mlp_output, dim=2)
+        mlp_output = mlp_output.reshape(batch, num_patches, 3, -1)
+        mlp_output = mlp_output.permute(0, 2, 1, 3).reshape(batch, 3, -1)
+        mlp_output = nn.functional.log_softmax(mlp_output, dim=-1)
 
+        pred_patches = mlp_output.reshape(batch, 3, num_patches, self.patch_size, self.patch_size)
+        
         # target to patches and one hot encode
         target_patches = self.to_patch(target)
-        target_patches = nn.functional.one_hot(target_patches, num_classes=3).float()
-        target_patches = target_patches.permute(0, 3, 1, 2)
-        target_flat = target_patches.reshape(batch, 3, -1)
+        target_flat = target_patches.reshape(batch, -1)
 
         #calculate loss
         criterion = nn.CrossEntropyLoss()
@@ -121,7 +117,7 @@ class FineTune(nn.Module):
         patch_size = self.patch_size
 
         with torch.no_grad():
-            _, pred_patches, target_patches = model(img, target)
+            _, pred_patches, target_patches = self.forward(img, target)
 
         pred_patches = pred_patches[0]
         target_patches = target_patches[0]
@@ -131,28 +127,28 @@ class FineTune(nn.Module):
         target_full = torch.zeros(1, img_size, img_size)
 
         patch_i = 0
-        for row in range(4):
-            for col in range(4):
-                target_plot = target_patches[:,patch_i].cpu().numpy()
-                target_plot = target_plot.reshape(3, patch_size, patch_size).transpose(1, 2, 0)
+        for row in range(img_size//patch_size):
+            for col in range(img_size//patch_size):
+                target_plot = target_patches[patch_i].cpu().numpy()
+                target_plot = target_plot.reshape(patch_size, patch_size)
                 pred_plot = pred_patches[:,patch_i].cpu().numpy()
-                pred_plot = pred_plot.reshape(3, patch_size, patch_size).transpose(1, 2, 0)
+                pred_plot = pred_plot.reshape(3, patch_size, patch_size)
+                
                 #take argmax to plot
-                target_plot = target_plot.argmax(axis=2)
-                pred_plot = pred_plot.argmax(axis=2)
+                pred_plot = pred_plot.argmax(axis=0)
 
                 #add to full image
-                target_full[0, row*32:(row+1)*32, col*32:(col+1)*32] = torch.tensor(target_plot)
-                pred_full[0, row*32:(row+1)*32, col*32:(col+1)*32] = torch.tensor(pred_plot)
+                target_full[0, row*patch_size:(row+1)*patch_size, col*patch_size:(col+1)*patch_size] = torch.tensor(target_plot)
+                pred_full[0, row*patch_size:(row+1)*patch_size, col*patch_size:(col+1)*patch_size] = torch.tensor(pred_plot)
                 patch_i += 1
                 
         #plot targetand prediction
         fig, axs = plt.subplots(1, 3, figsize=(6, 2))
         axs[0].imshow(img[0].cpu().numpy().transpose(1, 2, 0))
         axs[0].set_title('Image')
-        axs[1].imshow(target_full[0].cpu().numpy(), cmap='tab20')
+        axs[1].imshow(target_full[0].cpu().numpy(), cmap='gray')
         axs[1].set_title('Target')
-        axs[2].imshow(pred_full[0].cpu().numpy(), cmap='tab20')
+        axs[2].imshow(pred_full[0].cpu().numpy(), cmap='gray')
         axs[2].set_title('Prediction')
 
         for ax in axs:
