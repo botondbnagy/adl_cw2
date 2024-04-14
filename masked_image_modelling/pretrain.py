@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.optim.lr_scheduler import MultiStepLR
+
 
 import torchvision
 from torchvision import datasets
@@ -60,9 +62,11 @@ mim = SimMIM(
 ).to(device)
 optimizer = optim.AdamW(
 		params=mim.parameters(),
-		lr=8e-3,
-		weight_decay=5e-2
+		lr=1e-4,
+		weight_decay=0.05
 )
+
+scheduler = MultiStepLR(optimizer, milestones=[700], gamma=0.1)
 
 
 def display_reconstructions(testloader, mim):
@@ -102,7 +106,7 @@ def display_reconstructions(testloader, mim):
     plt.savefig('reconstructed_patches.png')
 
 
-# display_reconstructions(testloader, mim)
+# display_reconstructions(testloader, I'm)
 
 n_epochs = 1000
 for i in range(n_epochs):
@@ -111,7 +115,6 @@ for i in range(n_epochs):
     epoch_start = time.time()
     print(f'Epoch {i}', end=' ')
     for images, _ in trainloader:
-        # print(f'Epoch {i} | Batch {j}')
         j += 1
 
         images = images.to(device)
@@ -122,7 +125,14 @@ for i in range(n_epochs):
 
         running_loss += loss.item()
 
-    # display_reconstructions(testloader, mim)
+    # Step the LR scheduler
+    scheduler.step()
+
+    # Optional: Display reconstructed images or log additional information
+    if i % 50 == 0:
+        display_reconstructions(testloader, mim)
+        torch.save(mim.encoder.state_dict(), f'pretrained_encoder_epoch_{i}.pth')
+
     print(f'Epoch {i} - Loss: {running_loss / len(trainloader)} - Time: {time.time() - epoch_start}')
 
     display_reconstructions(testloader, mim)
