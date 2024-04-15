@@ -92,6 +92,7 @@ def finetune(model, trainloader, output_weight_path='finetuned_weights.pth', tes
 	# Define optimizer and loss function for mlp head
 	optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
 	# criterion = nn.CrossEntropyLoss()
+	device = get_device()
 
 	# Train head only
 	n_epochs = 1000
@@ -155,7 +156,7 @@ if __name__ == '__main__':
 	# Print number of parameters
 	print('Number of parameters (fine-tune model):', sum(p.numel() for p in model.parameters()))
 
-	finetune(model)
+	finetune(model, trainloader, testset)
 	
 	# Evaluate model
 	model.eval() # Set model to evaluation mode
