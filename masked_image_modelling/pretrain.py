@@ -17,53 +17,29 @@ from simmim import SimMIM
 from utils import ToDevice, get_device
 
 # Device
-device = get_device()
-print(f'Using device: {device}')
-
 IMAGENET_DEFAULT_MEAN = torch.tensor([0.485, 0.456, 0.406])
 IMAGENET_DEFAULT_STD = torch.tensor([0.229, 0.224, 0.225])
+device = get_device()
 
-# Dataset transforms
-transform = T.Compose([
-    T.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
-    T.RandomResizedCrop(128, scale=(0.67, 1), ratio=(3. / 4., 4. / 3.)),
-    T.RandomHorizontalFlip(),
-    T.ToTensor(),
-    T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
-])
+def load_imagenet_data():
+    # Dataset transforms
+    transform = T.Compose([
+        T.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+        T.RandomResizedCrop(128, scale=(0.67, 1), ratio=(3. / 4., 4. / 3.)),
+        T.RandomHorizontalFlip(),
+        T.ToTensor(),
+        T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
+    ])
 
-# Load the dataset
-dataset = datasets.ImageNet(root='./data', split='val', transform=transform)
-train_set, test_set = torch.utils.data.random_split(dataset, [45000, 5000])
+    # Load the dataset
+    dataset = datasets.ImageNet(root='./data', split='val', transform=transform)
+    train_set, test_set = torch.utils.data.random_split(dataset, [45000, 5000])
 
-# Load dataset into memory for faster training
-train_set, test_set = list(train_set), list(test_set)
-trainloader = torch.utils.data.DataLoader(train_set, batch_size=64, shuffle=True, num_workers=0)
-testloader = torch.utils.data.DataLoader(test_set, batch_size=64, shuffle=False, num_workers=0)
-
-model = ViT(
-    image_size = 128,
-    patch_size = 16,
-    num_classes = 2,
-    dim = 768,
-    depth = 12,
-    heads = 12,
-    mlp_dim = 3072,
-).to(device)
-
-# Print number of parameters
-print('Number of parameters:', sum(p.numel() for p in model.parameters()))
-
-mim = SimMIM(
-    encoder = model,
-    masking_ratio = 0.5  # they found 50% to yield the best results
-).to(device)
-optimizer = optim.AdamW(
-		params=mim.parameters(),
-		lr=8e-3,
-		weight_decay=5e-2
-)
-
+    # Load dataset into memory for faster training
+    train_set, test_set = list(train_set), list(test_set)
+    trainloader = torch.utils.data.DataLoader(train_set, batch_size=64, shuffle=True, num_workers=0)
+    testloader = torch.utils.data.DataLoader(test_set, batch_size=64, shuffle=False, num_workers=0)
+    return trainloader, testloader
 
 def display_reconstructions(testloader, mim):
     """Display 8 reconstructed patches and their corresponding ground truth patches."""
@@ -101,32 +77,64 @@ def display_reconstructions(testloader, mim):
     # plt.show()
     plt.savefig('reconstructed_patches.png')
 
+def train_model(model, trainloader, testloader=None, output_weight_name='pretrained_encoder.pth'):
+    n_epochs = 1000
+    
+    optimizer = optim.AdamW(
+        params=mim.parameters(),
+        lr=8e-3,
+        weight_decay=5e-2
+    )
 
-# display_reconstructions(testloader, mim)
+    for i in range(n_epochs):
+        j = 0
+        running_loss = 0.0
+        epoch_start = time.time()
+        print(f'Epoch {i}', end=' ')
+        for images, _ in trainloader:
+            # print(f'Epoch {i} | Batch {j}')
+            j += 1
 
-n_epochs = 1000
-for i in range(n_epochs):
-    j = 0
-    running_loss = 0.0
-    epoch_start = time.time()
-    print(f'Epoch {i}', end=' ')
-    for images, _ in trainloader:
-        # print(f'Epoch {i} | Batch {j}')
-        j += 1
+            images = images.to(device)
+            loss, pred, masks = model(images)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
 
-        images = images.to(device)
-        loss, pred, masks = mim(images)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
+            running_loss += loss.item()
 
-        running_loss += loss.item()
+        # display_reconstructions(testloader, mim)
+        print(f'Epoch {i} - Loss: {running_loss / len(trainloader)} - Time: {time.time() - epoch_start}')
 
-    # display_reconstructions(testloader, mim)
-    print(f'Epoch {i} - Loss: {running_loss / len(trainloader)} - Time: {time.time() - epoch_start}')
+        if testloader is not None:
+            display_reconstructions(testloader, model)
+            torch.save(model.encoder.state_dict(), output_weight_name)
 
-    display_reconstructions(testloader, mim)
-    torch.save(mim.encoder.state_dict(), 'pretrained_encoder.pth')
+    # Save the encoder
+    torch.save(model.encoder.state_dict(), output_weight_name)
 
-# Save the encoder
-torch.save(mim.encoder.state_dict(), 'pretrained_encoder.pth')
+
+if __name__ == "__main__":
+    device = get_device()
+    print(f'Using device: {device}')
+
+    model = ViT(
+        image_size = 128,
+        patch_size = 16,
+        num_classes = 2,
+        dim = 768,
+        depth = 12,
+        heads = 12,
+        mlp_dim = 3072,
+    ).to(device)
+
+    # Print number of parameters
+    print('Number of parameters:', sum(p.numel() for p in model.parameters()))
+
+    mim = SimMIM(
+        encoder = model,
+        masking_ratio = 0.5  # they found 50% to yield the best results
+    ).to(device)
+
+    trainloader, testloader = load_imagenet_data()
+    train_model(mim, trainloader, testloader)

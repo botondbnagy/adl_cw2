@@ -16,15 +16,8 @@ from utils import OxfordIIITPetsAugmented, ToDevice, get_device
 
 import matplotlib.pyplot as plt
 
-if __name__ == '__main__':
-	# Path to pre-trained weights
-	pretrained_weights_path = 'pretrained_encoder.pth'
-
-	# Set device
-	device = get_device()
-	print(f'Using device: {device}, {torch.cuda.get_device_name()}')
-
-	# Define some transformations for the Oxford IIIT Pet dataset
+def get_oxford_pet_data():
+		# Define some transformations for the Oxford IIIT Pet dataset
 	def tensor_trimap(t):
 		x = t * 255
 		x = x.to(torch.long)
@@ -92,29 +85,10 @@ if __name__ == '__main__':
 		shuffle=True,
 	)
 
-	# Instantiate encoder (ViT to be fine-tuned)
-	encoder = ViT(
-		image_size = 128,
-		patch_size = 16,
-		num_classes = 2,
-		dim = 768,
-		depth = 12,
-		heads = 12,
-		mlp_dim = 3072,
-	).to(device)
+	return trainloader, testloader, trainset, testset
 
-	# Print number of parameters
-	print('Number of parameters (encoder):', sum(p.numel() for p in encoder.parameters()))
 
-	# instantiate fine-tuning model, load weights from pre-trained model
-	model = FineTune(
-		encoder = encoder,
-		weights_path = pretrained_weights_path,
-	).to(device)
-
-	# Print number of parameters
-	print('Number of parameters (fine-tune model):', sum(p.numel() for p in model.parameters()))
-
+def finetune(model, trainloader, output_weight_path='finetuned_weights.pth', testset=None):
 	# Define optimizer and loss function for mlp head
 	optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
 	# criterion = nn.CrossEntropyLoss()
@@ -141,18 +115,50 @@ if __name__ == '__main__':
 
 		print(f'Epoch {epoch + 1}/{n_epochs} | Loss: {running_loss / j:.5f} | Time: {time.time() - epoch_start:.2f}s')
 		
-		torch.save(model.state_dict(), f'finetuned_weights.pth')
-		model.display_example(testset, show=False, save=True)
+		torch.save(model.state_dict(), output_weight_path)
+		if testset is not None:
+			model.display_example(testset, show=False, save=True)
 
 	# Save model
-	torch.save(model.state_dict(), 'finetuned_weights.pth')
+	torch.save(model.state_dict(), output_weight_path)
 
+if __name__ == '__main__':
+	# Path to pre-trained weights
+	pretrained_weights_path = 'pretrained_encoder.pth'
+
+	trainloader, testloader, trainset, testset = get_oxford_pet_data()
+
+	# Set device
+	device = get_device()
+	print(f'Using device: {device}, {torch.cuda.get_device_name()}')
+
+	# Instantiate encoder (ViT to be fine-tuned)
+	encoder = ViT(
+		image_size = 128,
+		patch_size = 16,
+		num_classes = 2,
+		dim = 768,
+		depth = 12,
+		heads = 12,
+		mlp_dim = 3072,
+	).to(device)
+
+	# Print number of parameters
+	print('Number of parameters (encoder):', sum(p.numel() for p in encoder.parameters()))
+
+	# instantiate fine-tuning model, load weights from pre-trained model
+	model = FineTune(
+		encoder = encoder,
+		weights_path = pretrained_weights_path,
+	).to(device)
+
+	# Print number of parameters
+	print('Number of parameters (fine-tune model):', sum(p.numel() for p in model.parameters()))
+
+	finetune(model)
+	
 	# Evaluate model
 	model.eval() # Set model to evaluation mode
 
 	# Save example prediction
 	model.display_example(testset, show=False, save=True)
-
-	#TODO: accuracy or other metrics
-
-
