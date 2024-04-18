@@ -79,17 +79,20 @@ if __name__ == '__main__':
 		**transform_dict,
 	)
 
+	# load the data into ram
+	trainset, testset = list(trainset), list(testset)
+
 	trainloader = torch.utils.data.DataLoader(
 			trainset,
-			batch_size=1024,
+			batch_size=64,
 			shuffle=True,
 	)
 			
 			
 	testloader = torch.utils.data.DataLoader(
 		testset,
-		batch_size=128,
-		shuffle=True,
+		batch_size=64,
+		shuffle=False,
 	)
 
 	# Instantiate encoder (ViT to be fine-tuned)
@@ -97,11 +100,12 @@ if __name__ == '__main__':
 		image_size = 128,
 		patch_size = 16,
 		num_classes = 2,
-		dim = 768,
+		dim = 128,
 		depth = 12,
-		heads = 12,
-		mlp_dim = 3072,
+		heads = 8,
+		mlp_dim = 512,
 	).to(device)
+
 
 	# Print number of parameters
 	print('Number of parameters (encoder):', sum(p.numel() for p in encoder.parameters()))
@@ -113,14 +117,15 @@ if __name__ == '__main__':
 	).to(device)
 
 	# Print number of parameters
-	print('Number of parameters (fine-tune model):', sum(p.numel() for p in model.parameters()))
+	print('Number of parameters (segmentation head):', 
+			sum(p.numel() for p in model.parameters()) - sum(p.numel() for p in encoder.parameters()))
 
 	# Define optimizer and loss function for mlp head
 	optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
 	# criterion = nn.CrossEntropyLoss()
 
 	# Train head only
-	n_epochs = 1000
+	n_epochs = 20
 	for epoch in range(n_epochs):
 		epoch_start = time.time()
 		j = 0 # Batch counter
@@ -141,8 +146,8 @@ if __name__ == '__main__':
 
 		print(f'Epoch {epoch + 1}/{n_epochs} | Loss: {running_loss / j:.5f} | Time: {time.time() - epoch_start:.2f}s')
 		
-		torch.save(model.state_dict(), f'finetuned_weights.pth')
-		model.display_example(testset, show=False, save=True)
+		# torch.save(model.state_dict(), f'finetuned_weights.pth')
+		# model.display_example(testset, show=False, save=True)
 
 	# Save model
 	torch.save(model.state_dict(), 'finetuned_weights.pth')

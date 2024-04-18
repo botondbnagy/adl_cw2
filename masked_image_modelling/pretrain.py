@@ -35,26 +35,41 @@ transform = T.Compose([
 ])
 
 # Load the dataset
-dataset = datasets.ImageNet(root='./data', split='val', transform=transform)
-train_set, test_set = torch.utils.data.random_split(dataset, [45000, 5000])
+print('Loading dataset...')
+dataset = datasets.ImageNet(root='./data', split='train', transform=transform)
+print('dataset size:', len(dataset))
+n_train = 200000
+
+#get random indices for train and test
+train_idx = torch.randperm(len(dataset))[:n_train]
+train_set = torch.utils.data.Subset(dataset, train_idx)
 
 # Load dataset into memory for faster training
-train_set, test_set = list(train_set), list(test_set)
-trainloader = torch.utils.data.DataLoader(train_set, batch_size=64, shuffle=True, num_workers=0)
-testloader = torch.utils.data.DataLoader(test_set, batch_size=64, shuffle=False, num_workers=0)
+# train_set = list(train_set)
+trainloader = torch.utils.data.DataLoader(train_set, batch_size=128, shuffle=True, num_workers=8)
 
 model = ViT(
     image_size = 128,
     patch_size = 16,
     num_classes = 2,
-    dim = 768,
+    dim = 128,
     depth = 12,
-    heads = 12,
-    mlp_dim = 3072,
+    heads = 8,
+    mlp_dim = 512,
 ).to(device)
 
 # Print number of parameters
-print('Number of parameters:', sum(p.numel() for p in model.parameters()))
+n_params = sum(p.numel() for p in model.parameters())
+print('Number of parameters:', n_params)
+
+# Model name
+savename = 'vit_'
+if n_params > 10**6:
+    savename += str(n_params // 10**6) + 'M_'
+else:
+    savename+= str(n_params // 10**3) + 'K_'
+savename += 'data_' + str(n_train // 10**3) + 'K'
+
 
 mim = SimMIM(
     encoder = model,
@@ -66,49 +81,74 @@ optimizer = optim.AdamW(
 		weight_decay=0.05
 )
 
-scheduler = MultiStepLR(optimizer, milestones=[700], gamma=0.1)
+scheduler = MultiStepLR(optimizer, milestones=[50, 85], gamma=0.1)
 
-
-def display_reconstructions(testloader, mim):
+def display_reconstructions(testloader, mim, epoch=None):
     """Display 8 reconstructed patches and their corresponding ground truth patches."""
     test_images, test_targets = next(iter(testloader))
     test_images = test_images.to(device)
     # Evaluate model on test image
     test_loss, test_pred, test_masks = mim(test_images)
 
-    # Plot an array of 8 masked patches reconstructed
-    fig, axs = plt.subplots(2, 1, figsize=(20, 4))
+    num_patches = mim.encoder.pos_embedding.shape[-2:][0] - 1
+    img_size = test_images.size(-1)
+    patch_size = int(img_size / (num_patches ** 0.5))
+    nrow = int(num_patches ** 0.5)
 
-    patch_size = 16
+    # Select a random image
+    plot_idx = torch.randint(0, test_images.size(0), (1,))
+    pred_patches = test_pred[plot_idx].view(-1, patch_size, patch_size, 3).to(device)
+    mask_patches = test_masks[plot_idx].view(-1, patch_size, patch_size, 3).to(device)
 
-    pred_patches = test_pred[0].view(-1, patch_size, patch_size, 3).to(device)
-    mask_patches = test_masks[0].view(-1, patch_size, patch_size, 3).to(device)
+    # Get the original patches by passing through .to_patch() method
+    org_patches = mim.to_patch(test_images[plot_idx]).view(-1, patch_size, patch_size, 3).to(device)
 
     # Unnormalize
     pred_patches = pred_patches * IMAGENET_DEFAULT_STD.to(device) + IMAGENET_DEFAULT_MEAN.to(device)
     mask_patches = mask_patches * IMAGENET_DEFAULT_STD.to(device) + IMAGENET_DEFAULT_MEAN.to(device)
+    org_patches = org_patches * IMAGENET_DEFAULT_STD.to(device) + IMAGENET_DEFAULT_MEAN.to(device)
+
+    # Replace patches with reconstructed patches
+    masked_idx = []
+    for i in range(num_patches):
+        original_patch = org_patches[i] # get ith original patch
+        original_patch = original_patch.view(-1) # Flatten
+
+        # check against all the patches in mask_patches to see if the patch was masked
+        for patch_id, mask_patch in enumerate(mask_patches):
+            mask_patch = mask_patch.view(-1)
+            # If the patch was masked, save the index
+            if torch.allclose(original_patch, mask_patch):
+                masked_idx.append((i, patch_id)) # (Original patch index, Masked patch index)
+                break
+
+    # Replace the masked patches with the reconstructed patches
+    reconstruction = org_patches.clone()
+    reconstruction[torch.tensor(masked_idx)[:, 0]] = pred_patches[torch.tensor(masked_idx)[:, 1]]
 
     # Make grid for plotting
-    test_patches = torchvision.utils.make_grid(pred_patches.permute(0, 3, 1, 2), nrow=8)
-    test_masks = torchvision.utils.make_grid(mask_patches.permute(0, 3, 1, 2), nrow=8)
+    reconstruction = torchvision.utils.make_grid(reconstruction.permute(0, 3, 1, 2), nrow=nrow, padding=0)
+
+    #plot the original image with masked patches grayed out
+    grayed_out = org_patches.clone()
+    grayed_out[torch.tensor(masked_idx)[:, 0]] = torch.tensor([0.0, 0.0, 0.0]).to(device)
+    #remove border
+    grayed_out = torchvision.utils.make_grid(grayed_out.permute(0, 3, 1, 2), nrow=nrow, padding=0)
+
+    # Plot the original image with masked patches grayed out
+    plt.imshow(grayed_out.permute(1, 2, 0).detach().cpu())
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(f'figures/reconstruction_{int(plot_idx)}_grayed.pdf', bbox_inches='tight', pad_inches=0)
 
     # Plot the reconstructed patches
-    axs[0].imshow(test_patches.permute(1, 2, 0).detach().cpu())
-    axs[0].set_title('Reconstructed patches')
-    axs[0].axis('off')
+    plt.imshow(reconstruction.permute(1, 2, 0).detach().cpu())
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(f'figures/reconstruction_{int(plot_idx)}.pdf', bbox_inches='tight', pad_inches=0)
+    plt.close()
 
-    # Plot the ground truth masks
-    axs[1].imshow(test_masks.permute(1, 2, 0).detach().cpu())
-    axs[1].set_title('Ground truth masks')
-    axs[1].axis('off')
-
-    # plt.show()
-    plt.savefig('reconstructed_patches.png')
-
-
-# display_reconstructions(testloader, I'm)
-
-n_epochs = 1000
+n_epochs = 100
 for i in range(n_epochs):
     j = 0
     running_loss = 0.0
@@ -128,15 +168,10 @@ for i in range(n_epochs):
     # Step the LR scheduler
     scheduler.step()
 
+    print(f'Epoch {i} - Loss: {running_loss / len(trainloader)} - Time: {time.time() - epoch_start} - LR: {scheduler.get_last_lr()}')
+
     # Optional: Display reconstructed images or log additional information
-    if i % 50 == 0:
-        display_reconstructions(testloader, mim)
-        torch.save(mim.encoder.state_dict(), f'pretrained_encoder_epoch_{i}.pth')
-
-    print(f'Epoch {i} - Loss: {running_loss / len(trainloader)} - Time: {time.time() - epoch_start}')
-
-    display_reconstructions(testloader, mim)
-    torch.save(mim.encoder.state_dict(), 'pretrained_encoder.pth')
-
-# Save the encoder
-torch.save(mim.encoder.state_dict(), 'pretrained_encoder.pth')
+    if (i + 1) % 2 == 0:
+        display_reconstructions(trainloader, mim, i+1)
+        torch.save(mim.encoder.state_dict(), f'pretrained_encoder_{savename}.pth')
+        torch.save(mim.state_dict(), f'pretrained_mim_{savename}.pth')

@@ -17,7 +17,7 @@ class FineTune(nn.Module):
         self,
         *,
         encoder,
-        weights_path
+        weights_path=None
     ):
         """
         Args:
@@ -30,7 +30,8 @@ class FineTune(nn.Module):
         self.encoder = encoder
 
         # Load weights from pre-trained model
-        self.encoder.load_state_dict(torch.load(weights_path))
+        if weights_path is not None:
+            self.encoder.load_state_dict(torch.load(weights_path))
 
         # Freeze weights
         # for param in self.encoder.parameters():
