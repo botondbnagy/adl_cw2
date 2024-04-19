@@ -1,96 +1,85 @@
 import torch
-from torch import nn
+import torch.nn as nn
 import torch.nn.functional as F
 # from einops import repeat
 
 class SimMIM(nn.Module):
     """
     SimMIM model class.
-    -------------------
-    Work in progress
+    
+    - Originally proposed in 'SimMIM: a Simple Framework for Masked Image Modeling' by Xie et al.
+    - https://arxiv.org/pdf/2111.09886.pdf
     """
     def __init__(
         self,
-        *,
-        encoder,
-        masking_ratio = 0.5
+        encoder: nn.Module,
+        masking_ratio: float = 0.5
     ):
         """
         Args:
-            encoder (nn.Module): Vision Transformer to be trained.
-            masking_ratio (float): Ratio of patches to be masked (default 0.5).
+        - encoder (nn.Module): Vision Transformer to be trained.
+        - masking_ratio (float): Ratio of patches to be masked (default 0.5).
         """
         super().__init__()
-        assert masking_ratio > 0 and masking_ratio < 1, 'masking ratio must be kept between 0 and 1'
-        self.masking_ratio = masking_ratio
-
+        
         # Get hyperparameters and functions from encoder (ViT to be trained)
         self.encoder = encoder
-        num_patches, encoder_dim = encoder.pos_embedding.shape[-2:]
+        encoder_dim = encoder.pos_embedding.shape[-1]
 
-        self.to_patch = encoder.to_patch_embedding[0]
-        self.patch_to_emb = nn.Sequential(*encoder.to_patch_embedding[1:])
+        assert masking_ratio < 1 and masking_ratio > 0, 'Masking ratio must be between 0 and 1!'
+        self.mask_ratio = masking_ratio
 
-        pixel_values_per_patch = encoder.to_patch_embedding[2].weight.shape[-1]
+        self.get_patches = encoder.to_patch_embedding[0]
+        self.get_patch_embedding = nn.Sequential(*encoder.to_patch_embedding[1:])
+        patch_values = encoder.to_patch_embedding[2].weight.shape[-1]
 
         # Linear head (decoder) to predict pixel values
         self.mask_token = nn.Parameter(torch.randn(encoder_dim))
-        self.to_pixels = nn.Linear(encoder_dim, pixel_values_per_patch)
+        self.decoder = nn.Linear(encoder_dim, patch_values)
 
-    def forward(self, img):
+        # L1 Loss function
+        self.loss = nn.L1Loss()
+
+    def forward(self, x):
         """
         Run a forward pass of the SimMIM model.
 
         Args:
-            img (torch.Tensor): Batch of images to be masked and reconstructed.
+        - x (torch.Tensor): Batch of images to be masked and reconstructed.
 
         Returns:
-            float: Reconstruction loss for the batch.
-            torch.Tensor: Predicted pixel values for masked patches.
-            torch.Tensor: Ground truth masked patches.
+        - float: Reconstruction loss for the batch.
+        - torch.Tensor: Predicted pixel values for masked patches.
+        - torch.Tensor: Ground truth masked patches.
         """
         
-        device = img.device
+        # Get device
+        device = x.device
 
-        # Get patches
-        patches = self.to_patch(img)
-        batch, num_patches, *_ = patches.shape
+        # Get patches, patch embeddings and positional embeddings
+        patches = self.get_patches(x)
+        batch_size, n_patches, _ = patches.shape
+        batch_range = torch.arange(batch_size, device = device)[:, None]
 
-        # For indexing
-        batch_range = torch.arange(batch, device = device)[:, None]
+        pos_embedding = self.encoder.pos_embedding[:, 1:(n_patches + 1)]
+        tokens = self.get_patch_embedding(patches) + pos_embedding
 
-        # Get positions
-        pos_emb = self.encoder.pos_embedding[:, 1:(num_patches + 1)]
-
-        # Patch to embeddings
-        tokens = self.patch_to_emb(patches)
-        tokens = tokens + pos_emb
-
-        # Prepare mask tokens
-        # mask_tokens = repeat(self.mask_token, 'd -> b n d', b = batch, n = num_patches)
-        mask_tokens = self.mask_token.unsqueeze(0).expand(batch, num_patches, -1)
-        mask_tokens = mask_tokens + pos_emb
+        # Get mask tokens
+        mask_tokens = self.mask_token.unsqueeze(0).expand(batch_size, n_patches, -1) + pos_embedding
 
         # Calculate number of masked tokens and create a boolean mask
-        num_masked = int(self.masking_ratio * num_patches)
-        masked_indices = torch.rand(batch, num_patches, device = device).topk(k = num_masked, dim = -1).indices
-        masked_bool_mask = torch.zeros((batch, num_patches), device = device).scatter_(-1, masked_indices, 1).bool()
+        n_masked = int(self.mask_ratio * n_patches)
+        masked_indices = torch.rand(batch_size, n_patches, device=device).topk(k=n_masked, dim=-1).indices
+        masked_bool = torch.zeros((batch_size, n_patches), device=device).scatter_(-1, masked_indices, 1).bool()
 
-        # Mask tokens
-        tokens = torch.where(masked_bool_mask[..., None], mask_tokens, tokens)
+        # Mask the tokens and run them through the transformer
+        tokens = torch.where(masked_bool[:,:, None], mask_tokens, tokens)
+        encoded_tokens = self.encoder.transformer(tokens)
+        encoded_mask_tokens = encoded_tokens[batch_range, masked_indices]
 
-        # Encode the masked tokens
-        encoded = self.encoder.transformer(tokens)
-
-        # Get the masked tokens
-        encoded_mask_tokens = encoded[batch_range, masked_indices]
-
-        # Decode the masked tokens (predict pixel values)
-        pred_pixel_values = self.to_pixels(encoded_mask_tokens)
-
-        # Get the original masked patches
+        # Predict pixel values for masked patches with decoder, and calculate loss (L1)
+        pred_patches = self.decoder(encoded_mask_tokens)
         masked_patches = patches[batch_range, masked_indices]
+        loss = self.loss(pred_patches, masked_patches) / n_masked
 
-        # Calculate reconstruction loss (L1 loss)
-        recon_loss = F.l1_loss(pred_pixel_values, masked_patches) / num_masked
-        return recon_loss, pred_pixel_values, masked_patches
+        return loss, pred_patches, masked_patches

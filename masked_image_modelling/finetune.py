@@ -9,15 +9,16 @@ import matplotlib.pyplot as plt
 
 class FineTune(nn.Module):
     """
-    FineTune model class.
-    -------------------
-    Work in progress
+    FineTune module.
+    
+    This model takes as an argument a ViT encoder pre-trained with SimMIM. 
+    The model is then fine-tuned on an image segmentation task.
     """
     def __init__(
         self,
         *,
-        encoder,
-        weights_path=None
+        encoder: nn.Module,
+        weights_path: str = None
     ):
         """
         Args:
@@ -28,29 +29,29 @@ class FineTune(nn.Module):
 
         # Instantiate encoder (ViT to be fine-tuned)
         self.encoder = encoder
+        encoder_dim = encoder.pos_embedding.shape[-1]
 
-        # Load weights from pre-trained model
+        # Load weights from pre-trained encoder
         if weights_path is not None:
             self.encoder.load_state_dict(torch.load(weights_path))
 
-        # Freeze weights
-        # for param in self.encoder.parameters():
-        #     param.requires_grad = False
+        # Get patches and patch embeddings
+        self.get_patches = encoder.to_patch_embedding[0]
+        self.get_patch_embedding = nn.Sequential(*encoder.to_patch_embedding[1:])
+        patch_values = encoder.to_patch_embedding[2].weight.shape[-1]
 
-        # Get number of patches and encoder dimension
-        num_patches, encoder_dim = encoder.pos_embedding.shape[-2:]
-        self.to_patch = encoder.to_patch_embedding[0]
-        self.patch_to_emb = nn.Sequential(*encoder.to_patch_embedding[1:])
-        pixel_values_per_patch = encoder.to_patch_embedding[2].weight.shape[-1]
-
-        #infer patch size from above 
-        self.patch_size = int((pixel_values_per_patch/3)**0.5)
+        # Infer patch size from above 
+        self.patch_size = int((patch_values / 3) ** 0.5)
         print('patch_size:', self.patch_size)
 
         # Linear head (decoder) to predict segmentation target
         self.mlp = nn.Linear(encoder_dim, self.patch_size ** 2 * 3)
+        self.loss = nn.CrossEntropyLoss()
 
-    def forward(self, img, target):
+    def forward(self,
+                img: torch.Tensor,
+                target: torch.Tensor
+    ) -> tuple:
         """
         Run a forward pass of the FineTune model.
 
@@ -71,37 +72,30 @@ class FineTune(nn.Module):
         device = img.device
 
         # Get patches
-        patches = self.to_patch(img)
-        batch, num_patches, *_ = patches.shape
+        patches = self.get_patches(img)
+        batch_size, n_patches, _ = patches.shape
 
-        # For indexing
-        batch_range = torch.arange(batch, device = device)[:, None]
+        # Get position embeddings
+        pos_embedding = self.encoder.pos_embedding[:, 1:(n_patches + 1)]
 
-        # Get positions
-        pos_emb = self.encoder.pos_embedding[:, 1:(num_patches + 1)]
-
-        # Get embeddings
-        tokens = self.patch_to_emb(patches)
-        tokens = tokens + pos_emb
-
-        # encoder output with weights frozen
+        # Get encoder output
+        tokens = self.get_patch_embedding(patches) + pos_embedding
         encoder_output = self.encoder.transformer(tokens)
         
-        # pass each patch through the mlp
+        # Pass each patch through the prediction head (decoder)
         mlp_output = self.mlp(encoder_output)
-        mlp_output = mlp_output.reshape(batch, num_patches, 3, -1)
-        mlp_output = mlp_output.permute(0, 2, 1, 3).reshape(batch, 3, -1)
+        mlp_output = mlp_output.reshape(batch_size, n_patches, 3, -1)
+        mlp_output = mlp_output.permute(0, 2, 1, 3).reshape(batch_size, 3, -1)
         mlp_output = nn.functional.log_softmax(mlp_output, dim=-1)
 
-        pred_patches = mlp_output.reshape(batch, 3, num_patches, self.patch_size, self.patch_size)
+        pred_patches = mlp_output.reshape(batch_size, 3, n_patches, self.patch_size, self.patch_size)
         
-        # target to patches and one hot encode
-        target_patches = self.to_patch(target)
-        target_flat = target_patches.reshape(batch, -1)
+        # Convert target to patches and one hot encode
+        target_patches = self.get_patches(target)
+        target_flat = target_patches.reshape(batch_size, -1)
 
-        #calculate loss
-        criterion = nn.CrossEntropyLoss()
-        loss = criterion(mlp_output, target_flat)
+        # Calculate loss
+        loss = self.loss(mlp_output, target_flat)
 
         return loss, pred_patches, target_patches
     
