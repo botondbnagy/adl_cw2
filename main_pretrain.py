@@ -1,5 +1,7 @@
+# Description: Pre-train SimMIM model on a subset of the ImageNet1k dataset.
 import time
 from datetime import datetime
+
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
@@ -7,18 +9,18 @@ from torchvision import datasets
 import torchvision.transforms as T
 
 # File imports
-from vit import ViT
-from simmim import SimMIM
-from utils import get_device, save_reconstructions, pretrain_transforms
-from configs import configs
+from models.vit import ViT
+from models.simmim import SimMIM
+from utils.utils import get_device, save_reconstructions, pretrain_transforms
+from utils.configs import configs
 
 # Command line arguments
 TRAIN_SIZE = 100000
 BATCH_SIZE = 64
-CONFIG = 'vit_4M'
+CONFIG = 'vit_4M_pretrain'
 RUN_PLOTS = False # plot reconstructions every 10 epochs
 
-# Constans and configurations
+# Constants and configurations
 config = configs[CONFIG]
 
 # Device
@@ -37,13 +39,13 @@ trainloader = torch.utils.data.DataLoader(train_set, batch_size=BATCH_SIZE, shuf
 
 # Load the model
 model = ViT(
-    image_size=config['image_size'],
-    patch_size=config['patch_size'],
-    num_classes=config['num_classes'],
-    dim=config['dim'],
-    depth=config['depth'],
-    heads=config['heads'],
-    mlp_dim=config['mlp_dim']
+    image_size = config['image_size'],
+    patch_size = config['patch_size'],
+    num_classes = config['num_classes'],
+    dim = config['dim'],
+    depth = config['depth'],
+    heads = config['heads'],
+    mlp_dim = config['mlp_dim']
 ).to(device)
     
 # Print number of parameters
@@ -98,4 +100,4 @@ for i in range(config['epochs']):
         torch.save(mim.encoder.state_dict(), f'pretrained_encoder_{savename}.pth')
         torch.save(mim.state_dict(), f'pretrained_mim_{savename}.pth')
         if RUN_PLOTS:
-            plot_reconstructions(trainloader, mim, savename + f'_epoch_{i + 1}')
+            mim.plot_reconstructions(trainloader, mim, savename + f'_epoch_{i + 1}')

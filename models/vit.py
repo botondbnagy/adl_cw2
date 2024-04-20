@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from einops.layers.torch import Rearrange
 
-
 class MLP(nn.Module):
     """Feed-forward neural network for the transformer block."""
     def __init__(self, 

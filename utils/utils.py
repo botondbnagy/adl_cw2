@@ -1,9 +1,11 @@
-import torch
-import torchvision
 import os
 import matplotlib.pyplot as plt
 
-class OxfordIIITPetsAugmented(torchvision.datasets.OxfordIIITPet):
+import torch
+import torchvision
+import torchvision.transforms as T
+
+class AugmentedOxfordIIITPet(torchvision.datasets.OxfordIIITPet):
     """
     Data augmentation class for the Oxford IIIT Pets dataset.
     
@@ -15,14 +17,26 @@ class OxfordIIITPetsAugmented(torchvision.datasets.OxfordIIITPet):
         self,
         root: str,
         split: str,
-        target_types="segmentation",
-        download=False,
-        pre_transform=None,
-        post_transform=None,
-        pre_target_transform=None,
-        post_target_transform=None,
-        common_transform=None,
+        target_types: str = "segmentation",
+        download: bool = False,
+        pre_transform = None,
+        post_transform = None,
+        pre_target_transform = None,
+        post_target_transform = None,
+        common_transform = None,
     ):
+        """
+        Args:
+        - root (str): Root directory of dataset.
+        - split (str): One of {'test', 'trainval'}.
+        - target_types (str): One of {'segmentation', 'category'}.
+        - download (bool): Whether to download the dataset.
+        - pre_transform (callable): Prior transformation to images.
+        - post_transform (callable): Post transformation to images.
+        - pre_target_transform (callable): Prior transformation to targets.
+        - post_target_transform (callable): Post transformation to targets.
+        - common_transform (callable): Common transformation to both images and targets.
+        """
         super().__init__(
             root=root,
             split=split,
@@ -36,19 +50,20 @@ class OxfordIIITPetsAugmented(torchvision.datasets.OxfordIIITPet):
         self.common_transform = common_transform
 
     def __len__(self):
+        """Return the length of the dataset."""
         return super().__len__()
 
     def __getitem__(self, idx):
+        """Get the item at the given index."""
         (input, target) = super().__getitem__(idx)
         
-        # Common transforms are performed on both the input and the labels
-        # by creating a 4 channel image and running the transform on both.
-        # Then the segmentation mask (4th channel) is separated out.
+        # Apply common transform
         if self.common_transform is not None:
             both = torch.cat([input, target], dim=0)
             both = self.common_transform(both)
             (input, target) = torch.split(both, 3, dim=0)
         
+        # Apply post transforms to input and target
         if self.post_transform is not None:
             input = self.post_transform(input)
         if self.post_target_transform is not None:
@@ -64,25 +79,33 @@ def get_device():
     else:
         return torch.device("cpu")
     
+def get_dict(**kwargs):
+    """Return a dictionary from keyword arguments."""
+    return kwargs
 
-class ToDevice(torch.nn.Module):
-    """
-    Sends the input object to the device specified in the
-    object's constructor by calling .to(device) on the object.
-    """
-    def __init__(self, device):
-        super().__init__()
-        self.device = device
+# class ToDevice(torch.nn.Module):
+#     """
+#     Sends the input object to the device specified in the
+#     object's constructor by calling .to(device) on the object.
+#     """
+#     def __init__(self, device):
+#         super().__init__()
+#         self.device = device
 
-    def forward(self, img):
-        """Send the input object to the device."""
-        return img.to(self.device)
+#     def forward(self, img):
+#         """Send the input object to the device."""
+#         return img.to(self.device)
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(device={self.device})"
+#     def __repr__(self) -> str:
+#         return f"{self.__class__.__name__}(device={self.device})"
 
 
-def save_reconstructions(pred_patches, mask_patches, org_patches, model_name, plot_idx):
+def save_reconstructions(pred_patches: torch.Tensor, 
+                         mask_patches: torch.Tensor, 
+                         org_patches: torch.Tensor, 
+                         model_name: str, 
+                         plot_idx: int
+):
     """
     Plot and save reconstructions of given image patches.
 
@@ -129,7 +152,11 @@ def save_reconstructions(pred_patches, mask_patches, org_patches, model_name, pl
     plot_from_patches(reconstruction, n_patches, savepath, f'reconstruction_{int(plot_idx)}')
     plot_from_patches(org_patches, n_patches, savepath, f'reconstruction_org_{int(plot_idx)}')
 
-def plot_from_patches(patches, n_patches, savepath, name):
+def plot_from_patches(patches: torch.Tensor, 
+                      n_patches: int, 
+                      savepath: str, 
+                      name: str
+):
     """
     Construct image from patches and save it.
 
@@ -156,8 +183,7 @@ def get_imagenet_defaults():
 
     return IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-
-def pretrain_transforms(image_size):
+def pretrain_transforms(image_size: int):
     """
     Returns the transforms for the pretraining phase.
     
@@ -178,5 +204,42 @@ def pretrain_transforms(image_size):
         T.ToTensor(),
         T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
         ])
+
+    return transform
+
+def convert_trimap_seg(map: torch.Tensor) -> torch.Tensor:
+    """
+    Rescale the segmentation map to 0, 1, 2.
+    
+    Args:
+    - t (torch.Tensor): segmentation map.
+
+    Returns:
+    - torch.Tensor: rescaled segmentation map.
+    """
+    rescaled_map = map * 255
+    rescaled_map = rescaled_map.to(torch.long)
+    rescaled_map = rescaled_map - 1
+    return rescaled_map
+
+def finetune_transforms():
+    """
+    Returns the transforms for the finetuning phase on Oxford Pet data.
+    This ensures transforms are applied to both the images and the targets.
+    """
+    transform = get_dict(
+		pre_transform=T.ToTensor(),
+		pre_target_transform=T.ToTensor(),
+		common_transform=T.Compose([
+			T.Resize((128, 128), interpolation=T.InterpolationMode.NEAREST),
+			T.RandomHorizontalFlip(p=0.5),
+		]),
+		post_transform=T.Compose([
+			T.ColorJitter(contrast=0.3)
+		]),
+		post_target_transform=T.Compose([
+			T.Lambda(convert_trimap_seg),
+		]),
+	)
 
     return transform
