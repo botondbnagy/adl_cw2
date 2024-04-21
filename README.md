@@ -16,9 +16,8 @@ with pip or conda, or use:
         wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_val.tar --no-check-certificate
         wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_train.tar --no-check-certificate
     Note that this may take upwards of **4 hours**, depending on your connection.
-
-3. Next, move these files to the `/data/` folder.
-4. Run the following to start pre-training (with the default settings used in the report, on a smaller subset of data):
+   
+2. Run the following to start pre-training (with the default settings used in the report, on a smaller subset of data):
 
         python main_pretrain.py \
             --config vit_4M_pretrain \
@@ -26,7 +25,7 @@ with pip or conda, or use:
             --train_size 10000 \
             --epochs 100 \
 
-   This will print training statistics and save the model weights as a `.pth` file every epoch. Use the flag `--run_plots` to save reconstructions during training.
+   This will first extract the compressed ImageNet files, then start printing training statistics and save the model weights as a `.pth` file every epoch. Use the flag `--run_plots` to save reconstructions during training.
    
 ## Fine-Tuning
 1. With the pre-trained encoder weights in the `/weights/` folder, run this command for fine-tuning, which will download Oxford Pets III and start training initialised with the weights given:
