@@ -63,14 +63,13 @@ def pretrain_evaluate(full_mim_path, config, BATCH_SIZE, TEST_SIZE=1000):
 
     print('Finished plotting reconstructions')
 
-def finetune_evaluate(config, WEIGHTS_PATH, BATCH_SIZE, TEST_SIZE=1000, save=False, show=True):
+def finetune_evaluate(config, WEIGHTS_PATH, BATCH_SIZE, TEST_SIZE=1000, TRAIN_SIZE=6000, save=False, show=True):
     '''
     Display/save an example prediction from the segmentation model
     and calculate mIoU, accuracy on the test set.
     '''
 
-    # Command line arguments
-    TRAIN_SIZE = 6000
+    # Seed for reproducibility
     TRAIN_SPLIT_SEED = 42
 
     # Device
@@ -194,7 +193,7 @@ def finetune_evaluate(config, WEIGHTS_PATH, BATCH_SIZE, TEST_SIZE=1000, save=Fal
             target_patches = target_patches[0]
 
             pred_flat = pred_patches.argmax(dim=0).view(-1).cpu()
-            target_flat = target_patches.argmax(dim=0).view(-1).cpu()
+            target_flat = target_patches.view(-1).cpu()
 
             #calculate accuracy
             test_accuracy += (pred_flat == target_flat).sum().item()/len(pred_flat)
@@ -252,20 +251,27 @@ def finetune_evaluate(config, WEIGHTS_PATH, BATCH_SIZE, TEST_SIZE=1000, save=Fal
     print(f'Train accuracy: {train_accuracy:.4f}')
 
 if __name__ == '__main__':
-    full_mim_path = 'weights/pretrained_mim_vit_4M_pretrain_data_200K_21-19.pth'
-    finetune_path = 'vit_4M_finetune_data_6000_99.pth'
 
-    # Command line arguments
-    BATCH_SIZE = 64
-    PT_CONFIG = 'vit_4M_pretrain'
-    FT_CONFIG = 'vit_4M_finetune'
-    PT_EVAL = False
-    FT_EVAL = True
+    # Parse arguments
+    parser = argparse.ArgumentParser(description='Evaluate the performance of pre-trained and fine-tuned models.')
+    parser.add_argument('--model', type=str, default='ft', help='Model to evaluate (pt: pre-trained, ft: fine-tuned).')
+    parser.add_argument('--config', type=str, default='vit_4M_finetune', help='Configuration to use for pre-training or fine-tuning.')
+    parser.add_argument('--train_size', type=int, default=6000, help='Number of fine-tuning training samples to use.')
+    parser.add_argument('--test_size', type=int, default=1000, help='Number of fine-tuning test samples to use.')
+    parser.add_argument('--weights', type=str, default='weights/vit_4M_finetune', help='Path to pre-trained (MIM) or fine-tuned weights.')
+    parser.add_argument('--batch_size', type=int, default=64, help='Batch size for evaluation.')
 
-    if PT_EVAL:
-        config = configs[PT_CONFIG]
-        pretrain_evaluate(full_mim_path, config, BATCH_SIZE)
+    # Get arguments from command line
+    args = parser.parse_args()
 
-    if FT_EVAL:
-        config = configs[FT_CONFIG]
-        finetune_evaluate(config, finetune_path, BATCH_SIZE)
+    config = configs[args.config]
+    train_size = args.train_size
+    test_size = args.test_size
+    weights_path = args.weights
+    BATCH_SIZE = args.batch_size
+
+    if args.model == 'pt':
+        pretrain_evaluate(weights_path, config, BATCH_SIZE, TEST_SIZE=test_size)
+
+    if args.model == 'ft':
+        finetune_evaluate(config, weights_path, BATCH_SIZE, TEST_SIZE=test_size, TRAIN_SIZE=train_size)
