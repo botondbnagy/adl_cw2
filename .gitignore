@@ -168,7 +168,7 @@ cython_debug/
 *.bin
 # *data/*
 # *.pth
-*figures/*
+# *figures/*
 
 #mac
 .DS_Store
