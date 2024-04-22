@@ -18,12 +18,15 @@ class FineTune(nn.Module):
         self,
         *,
         encoder: nn.Module,
-        weights_path: str = None
+        weights_path: str = None,
+        weights_device: str = 'cpu'
     ):
         """
         Args:
-            encoder (nn.Module): Vision Transformer to be trained.
-            weights_path (str): Path to saved weights from pre-trained model.
+        - encoder (nn.Module): Vision Transformer to be trained.
+        - weights_path (str): Path to saved weights from pre-trained model. If None, the model is 
+        - trained from scratch (baseline model).
+        - weights_device (str): Device that the loaded weights are stored on.
         """
         super().__init__()
 
@@ -33,7 +36,7 @@ class FineTune(nn.Module):
 
         # Load weights from pre-trained encoder
         if weights_path is not None:
-            self.encoder.load_state_dict(torch.load(weights_path))
+            self.encoder.load_state_dict(torch.load(weights_path, map_location=weights_device))
 
         # Get patches and patch embeddings
         self.get_patches = encoder.to_patch_embedding[0]
@@ -42,7 +45,6 @@ class FineTune(nn.Module):
 
         # Infer patch size from above 
         self.patch_size = int((patch_values / 3) ** 0.5)
-        print('patch_size:', self.patch_size)
 
         # Linear head (decoder) to predict segmentation target
         self.mlp = nn.Linear(encoder_dim, self.patch_size ** 2 * 3)

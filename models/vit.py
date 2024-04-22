@@ -169,14 +169,13 @@ class ViT(nn.Module):
 
     """
     def __init__(self, 
-                 *, 
                  image_size: int, 
                  patch_size: int, 
-                 num_classes: int,
                  dim: int, 
                  depth: int, 
                  heads: int, 
                  mlp_dim: int, 
+                 num_classes: int = 0,
                  n_channels: int = 3, 
                  dim_head: int = 64, 
                  dropout: int = 0.0, 
@@ -222,8 +221,11 @@ class ViT(nn.Module):
         self.dropout = nn.Dropout(emb_dropout)
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
 
-        # MLP head for classification tasks
-        self.head = nn.Linear(dim, num_classes)
+        # MLP head for classification tasks - if num_classes is 0, return transformer output
+        if num_classes == 0:
+            self.head = nn.Identity()
+        else:
+            self.head = nn.Linear(dim, num_classes)
 
     def forward(self, img):
         """
@@ -251,6 +253,9 @@ class ViT(nn.Module):
         # Apply dropout and transformer
         x = self.dropout(x)
         x = self.transformer(x)
+
+        # Get class token
+        x = x[:, 0]
 
         # Apply MLP head
         return self.head(x)
