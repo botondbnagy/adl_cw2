@@ -33,7 +33,7 @@ with pip or conda, or use:
             --config vit_4M_finetune \
             --train_size 6000 \
             --test_size 1000 \
-            --weights pretrained_encoder_vit_4M_10K
+            --weights weights/encoder_vit_4M_pretrain_200K.pth
    
    Loss is printed every epoch while test set pixel accuracy and mean IoU is calculated after training is complete.
    Segmentation predictions will be saved under `/figures/`.
@@ -56,19 +56,19 @@ with pip or conda, or use:
             --config vit_4M_finetune \
             --train_size 6000 \
             --test_size 1000 \
-            --weights pretrained_encoder_vit_4M_10K \
+            --weights weights/encoder_vit_4M_pretrain_200K.pth \
             --int_finetune
 
 ## Evaluation
 To plot reconstructions from pre-trained models, run:
 
-        python evaluate.py \
+        python evaluation.py \
             --config vit_4M_pretrain \
-            --weights pretrained_encoder_vit_4M_10K
+            --weights weights/mim_vit_4M_pretrain_200K.pth \
 
 To evaluate a fine-tuned segmentation model on the test set, run:
     
-            python evaluate.py \
-                --config vit_4M_finetune \
-                --weights pretrained_encoder_vit_4M_10K \
-                --test_size 1000
+        python evaluation.py \
+            --config vit_4M_finetune \
+            --weights weights/vit_4M_finetune_data_250.pth \
+            --test_size 1000
