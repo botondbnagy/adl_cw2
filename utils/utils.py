@@ -121,6 +121,7 @@ def save_reconstructions(pred_patches: torch.Tensor,
 
     # Unnormalize
     mean, std = get_imagenet_defaults()
+    mean, std = mean.to(device), std.to(device)
     pred_patches = pred_patches * std + mean
     mask_patches = mask_patches * std + mean
     org_patches = org_patches * std + mean

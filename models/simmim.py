@@ -84,7 +84,7 @@ class SimMIM(nn.Module):
 
         return loss, pred_patches, masked_patches
 
-    def plot_reconstructions(self, testloader, savename):
+    def plot_reconstructions(self, test_images, savename):
         """
         Plot and save reconstructions of random images from the test set.
 
@@ -92,16 +92,15 @@ class SimMIM(nn.Module):
         - testloader (torch.utils.data.DataLoader): Test set loader.
         - savename (str): Name of config (for saving the plots at eg. 'figures/vit_4M/').
         """
-        # Get a batch of test images
-        test_images, test_targets = next(iter(testloader))
+        # Get device
         device = test_images.device
 
         # Evaluate model on test images
-        test_loss, test_pred, test_masks = self.forward(test_images)
+        with torch.no_grad():
+            test_loss, test_pred, test_masks = self.forward(test_images)
 
-        num_patches = test_pred.size(2)
         img_size = test_images.size(-1)
-        patch_size = int(img_size / (num_patches ** 0.5))
+        patch_size = int((test_pred.size(-1) / 3) ** 0.5)
 
         # Select a random image, get MIM output and ground truth masks
         plot_idx = torch.randint(0, test_images.size(0), (1,)).item()
@@ -109,7 +108,7 @@ class SimMIM(nn.Module):
         mask_patches = test_masks[plot_idx].view(-1, patch_size, patch_size, 3)
 
         # Get the full image, split into patches
-        org_patches = self.get_patches(test_images[plot_idx]).view(-1, patch_size, patch_size, 3)
+        org_patches = self.get_patches(test_images[plot_idx].unsqueeze(0)).view(-1, patch_size, patch_size, 3)
 
         # Plot and save the reconstructions
         save_reconstructions(pred_patches, mask_patches, org_patches, savename, plot_idx)
