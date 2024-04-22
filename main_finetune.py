@@ -102,7 +102,7 @@ print('Number of parameters (encoder):', n_params_enc)
 # Model save name from parameters
 savename = args.config + '_'
 savename += 'data_' + str(train_size)
-savename += datetime.now().strftime('%H-%M') # to avoid overwriting
+# savename += datetime.now().strftime('%H-%M') # to avoid overwriting
 print(f'Saving model as: {savename}')
 
 # Run intermediate fine-tuning if specified in command line
@@ -166,7 +166,7 @@ if int_finetune:
         	f'LR: {int_scheduler.get_last_lr()[0]:.2e}')
 
 	# Save the intermediate fine-tuned encoder weights
-	torch.save(encoder.state_dict(), f'int_finetuned_weights_{savename}.pth')
+	torch.save(encoder.state_dict(), f'weights/int_{savename}.pth')
 
 print('=' * 100)
 if args.weights is not None:
@@ -216,4 +216,4 @@ for i in range(config['epochs']):
 
 	# Save model every 10 epochs
 	if (i + 1) % 10 == 0:
-		torch.save(model.state_dict(), f'finetuned_weights_{savename}_{i}.pth')
+		torch.save(model.state_dict(), f'weights/{savename}.pth')
