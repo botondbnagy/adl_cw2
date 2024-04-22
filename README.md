@@ -60,15 +60,16 @@ with pip or conda, or use:
             --int_finetune
 
 ## Evaluation
-To plot reconstructions from pre-trained models, run:
+To plot reconstructions from pre-trained models on ImageNet validation set (download above):
 
         python evaluation.py \
             --config vit_4M_pretrain \
             --weights weights/mim_vit_4M_pretrain_200K.pth \
 
-To evaluate a fine-tuned segmentation model on the test set, run:
+To evaluate a fine-tuned segmentation model on the Oxford-IIIt Pets test set, use a command like the following, replacing the weights with those saved after fine-tuning (see above):
     
         python evaluation.py \
             --config vit_4M_finetune \
             --weights weights/vit_4M_finetune_data_250.pth \
-            --test_size 1000
+            --test_size 1000 \
+            --train_size 250
