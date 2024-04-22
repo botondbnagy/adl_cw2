@@ -26,7 +26,7 @@ configs = {
         "batch_size": 64,
         "schedule_milestones": [70, 90, 95],
         "schedule_gamma": 0.5,
-        "epochs": 10,
+        "epochs": 100,
         "int_lr": 8e-4,
         "int_schedule_milestones": [180, 190],
         "int_schedule_gamma": 0.1,

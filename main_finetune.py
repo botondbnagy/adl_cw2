@@ -22,15 +22,6 @@ from models.finetune import FineTune
 from utils.utils import AugmentedOxfordIIITPet, get_device, finetune_transforms, int_finetune_transforms
 from utils.configs import configs
 
-# Command line arguments
-# TRAIN_SIZE = 250
-# TEST_SIZE = 1000
-# CONFIG = 'vit_4M_finetune'
-# TRAIN_SPLIT_SEED = 42
-# WEIGHTS_PATH = 'pt_weights_test.pth'
-# INT_FINETUNE = False
-# NUM_CLASSES = 6
-
 # Parse arguments
 parser = argparse.ArgumentParser(description='Fine-tune a pre-trained ViT model on the Oxford-IIIT Pet dataset for segmentation.')
 parser.add_argument('--config', type=str, default='vit_4M_finetune', help='Configuration to use for fine-tuning.')
@@ -174,11 +165,18 @@ if args.weights is not None:
 else:
 	print('Running baseline segmentation training...')
 # Segmentation fine-tuning
-model = FineTune(
-	encoder = encoder,
-	weights_path = weights_path,
-	weights_device = device,
-).to(device)
+if int_finetune:
+	model = FineTune(
+		encoder = encoder,
+		weights_path = None,
+		weights_device = device
+	).to(device)
+else:
+	model = FineTune(
+		encoder = encoder,
+		weights_path = weights_path,
+		weights_device = device,
+	).to(device)
 optimizer = optim.AdamW(
         params=model.parameters(),
         lr=config['lr'],
