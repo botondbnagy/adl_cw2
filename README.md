@@ -1,7 +1,8 @@
 # Instructions
 ## Requirements
-In addition to the default `comp0090-cw1-pt` conda environment please also install the following libraries:
+In this project, we use PyTorch as our deep learning Python library. In addition to the default `comp0197-cw1-pt` conda environment, please also install the following libraries:
 - `matplotlib`
+- `einops`
 
 with pip or conda, or use:
 
@@ -27,15 +28,16 @@ with pip or conda, or use:
 
    This will first extract the compressed ImageNet files, then start printing training statistics and save the model weights as a `.pth` file every epoch. Use the flag `--run_plots` to save reconstructions during training.
    
-## Fine-Tuning
-1. With the pre-trained encoder weights in the `/weights/` folder, run this command for fine-tuning, which will download Oxford Pets III and start training initialised with the weights given:
+## Fine-Tuning on Oxford-IIIT Pets
+1. With the pre-trained encoder weights in the `/weights/` folder, run this command for fine-tuning, which will download the Oxford-IIIT Pets dataset and start training initialised with the weights given:
 
         python main_finetune.py \
             --config vit_4M_finetune \
             --batch_size 64 \
-            --train_size 1000 \
+            --train_size 6000 \
+            --test_size 1000 \
             --epochs 20 \
             --weights pretrained_encoder_vit_4M_10K \
    
-   Loss is printed every epoch while test set accuracy and mean IoU is calculated after training is complete.
+   Loss is printed every epoch while test set pixel accuracy and mean IoU is calculated after training is complete.
    Segmentation predictions will be saved under `/figures/`.

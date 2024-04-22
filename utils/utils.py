@@ -189,7 +189,7 @@ def pretrain_transforms(image_size: int):
     Returns the transforms for the pretraining phase.
     
     Args:
-        image_size (int): Size of images to be resized to.
+    - image_size (int): Size of images to be resized to.
     """
     # Transforms
     IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD = get_imagenet_defaults()
@@ -213,7 +213,7 @@ def convert_trimap_seg(map: torch.Tensor) -> torch.Tensor:
     Rescale the segmentation map to 0, 1, 2.
     
     Args:
-    - t (torch.Tensor): segmentation map.
+    - map (torch.Tensor): segmentation map.
 
     Returns:
     - torch.Tensor: rescaled segmentation map.
@@ -223,16 +223,19 @@ def convert_trimap_seg(map: torch.Tensor) -> torch.Tensor:
     rescaled_map = rescaled_map - 1
     return rescaled_map
 
-def finetune_transforms():
+def finetune_transforms(image_size: int):
     """
     Returns the transforms for the finetuning phase on Oxford Pet data.
     This ensures transforms are applied to both the images and the targets.
+
+    Args:
+    - image_size (int): Size of images to be resized to.
     """
     transform = get_dict(
 		pre_transform=T.ToTensor(),
 		pre_target_transform=T.ToTensor(),
 		common_transform=T.Compose([
-			T.Resize((128, 128), interpolation=T.InterpolationMode.NEAREST),
+			T.Resize((image_size, image_size), interpolation=T.InterpolationMode.NEAREST),
 			T.RandomHorizontalFlip(p=0.5),
 		]),
 		post_transform=T.Compose([
@@ -242,5 +245,26 @@ def finetune_transforms():
 			T.Lambda(convert_trimap_seg),
 		]),
 	)
+
+    return transform
+
+def int_finetune_transforms(image_size: int):
+    """
+    Returns the transforms for the intermediate fine-tuning phase.
+    
+    Args:
+    - image_size (int): Size of images to be resized to.
+    """
+    # Transforms
+    IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD = get_imagenet_defaults()
+
+    transform = T.Compose([
+        T.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+        T.Resize((image_size, image_size), interpolation=T.InterpolationMode.NEAREST),
+        T.RandomHorizontalFlip(),
+        T.ColorJitter(contrast=0.3),
+        T.ToTensor(),
+        T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
+        ])
 
     return transform
