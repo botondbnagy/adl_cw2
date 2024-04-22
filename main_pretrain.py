@@ -24,12 +24,14 @@ from utils.configs import configs
 # Parse arguments from command line
 parser = argparse.ArgumentParser(description='Pre-train SimMIM model on a subset of the ImageNet1k dataset.')
 parser.add_argument('--config', type=str, default='vit_4M_pretrain', help='Configuration to use for pre-training.')
+parser.add_argument('--val_set', action='store_true', help='Whether to use the smaller (validation) set for training.')
 parser.add_argument('--train_size', type=int, default=100000, help='Number of training samples to use.')
 parser.add_argument('--run_plots', action='store_true', help='Whether to plot reconstructions during training.')
 
 # Get arguments from command line
 args = parser.parse_args()
 config = configs[args.config]
+val_set = args.val_set
 train_size = args.train_size
 run_plots = args.run_plots
 
@@ -42,7 +44,9 @@ transform = pretrain_transforms(image_size=config['image_size'])
 
 # Load the dataset and sample a random subset
 print('Loading dataset (this may take a while)...')
-dataset = datasets.ImageNet(root='./data', split='train', transform=transform)
+
+split = 'val' if val_set else 'train'
+dataset = datasets.ImageNet(root='./data', split=split, transform=transform)
 train_idx = torch.randperm(len(dataset))[:train_size] # random subset indices
 train_set = torch.utils.data.Subset(dataset, train_idx)
 trainloader = torch.utils.data.DataLoader(train_set, batch_size=config['batch_size'], shuffle=True)
