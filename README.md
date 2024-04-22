@@ -59,3 +59,16 @@ with pip or conda, or use:
             --weights pretrained_encoder_vit_4M_10K \
             --int_finetune
 
+## Evaluation
+To plot reconstructions from pre-trained models, run:
+
+        python evaluate.py \
+            --config vit_4M_pretrain \
+            --weights pretrained_encoder_vit_4M_10K
+
+To evaluate a fine-tuned segmentation model on the test set, run:
+    
+            python evaluate.py \
+                --config vit_4M_finetune \
+                --weights pretrained_encoder_vit_4M_10K \
+                --test_size 1000
