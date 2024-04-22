@@ -33,11 +33,31 @@ with pip or conda, or use:
 
         python main_finetune.py \
             --config vit_4M_finetune \
-            --batch_size 64 \
             --train_size 6000 \
             --test_size 1000 \
-            --epochs 20 \
-            --weights pretrained_encoder_vit_4M_10K \
+            --weights pretrained_encoder_vit_4M_10K
    
    Loss is printed every epoch while test set pixel accuracy and mean IoU is calculated after training is complete.
    Segmentation predictions will be saved under `/figures/`.
+2. To run a baseline model with **no pre-training**, omit the `--weights` argument, i.e. use the following command:
+
+        python main_finetune.py \
+            --config vit_4M_finetune \
+            --train_size 6000 \
+            --test_size 1000 \
+
+## Intermediate-Task Fine-Tuning on Intel Image Classification Dataset
+1. First, the Intel Image Classification dataset needs to be downloaded. From the project's root directory, run:
+        
+        cd data
+        wget https://huggingface.co/datasets/miladfa7/Intel-Image-Classification/resolve/main/archive.zip?download=true
+        
+2. With the pre-trained encoder weights in the `/weights/` folder, run the following command to perform intermediate fine-tuning on this dataset, followed by segmentation fine-tuning on Oxford-IIIT Pets:
+    
+            python main_finetune.py \
+            --config vit_4M_finetune \
+            --train_size 6000 \
+            --test_size 1000 \
+            --weights pretrained_encoder_vit_4M_10K \
+            --int_finetune
+

@@ -51,7 +51,6 @@ trainloader = torch.utils.data.DataLoader(train_set, batch_size=config['batch_si
 model = ViT(
     image_size = config['image_size'],
     patch_size = config['patch_size'],
-    num_classes = config['num_classes'],
     dim = config['dim'],
     depth = config['depth'],
     heads = config['heads'],
