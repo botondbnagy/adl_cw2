@@ -1,4 +1,3 @@
-# Instructions
 ## Requirements
 In this project, we use PyTorch as our deep learning Python library. In addition to the default `comp0197-cw1-pt` conda environment, please also install the following libraries:
 - `matplotlib`
@@ -24,7 +23,7 @@ with pip or conda, or use:
             --config vit_4M_pretrain \
             --train_size 10000 \
 
-   This will first extract the compressed ImageNet files, then start printing training statistics and save the model weights as a `.pth` file every epoch. Use the flag `--run_plots` to save reconstructions during training, and the `--val_set` flag to use the smaller (validation) set only, for quicker testing.
+   This will first extract the compressed ImageNet files, then start printing training statistics and save the model weights as a `.pth` file every epoch. Use the flag `--run_plots` to save reconstructions during training, and the `--val_set` flag to use the smaller (validation) set only, for quicker testing. Change the train size between 45k, 100k and 200k to reproduce results from our report.
    
 ## Fine-Tuning on Oxford-IIIT Pets
 1. With the pre-trained encoder weights in the `/weights/` folder, run this command for fine-tuning, which will download the Oxford-IIIT Pets dataset and start training initialised with the weights given:
@@ -36,7 +35,7 @@ with pip or conda, or use:
             --weights weights/encoder_vit_4M_pretrain_200K.pth
    
    Loss is printed every epoch while test set pixel accuracy and mean IoU is calculated after training is complete.
-   Segmentation predictions will be saved under `/figures/`.
+   Segmentation predictions will be saved under `/figures/`. Change the train size to reproduce results from our report.
 2. To run a baseline model with **no pre-training**, omit the `--weights` argument, i.e. use the following command:
 
         python main_finetune.py \
