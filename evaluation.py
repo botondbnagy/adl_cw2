@@ -30,7 +30,7 @@ def pretrain_evaluate(full_mim_path, config, BATCH_SIZE, TEST_SIZE=1000):
     dataset = datasets.ImageNet(root='./data', split='val', transform=transform)
     test_idx = torch.randperm(len(dataset))[:TEST_SIZE] # random subset indices
     test_set = torch.utils.data.Subset(dataset, test_idx)
-    testloader = torch.utils.data.DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+    testloader = torch.utils.data.DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
 
     model = ViT(
         image_size = config['image_size'],
