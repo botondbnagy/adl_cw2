@@ -16,17 +16,15 @@ with pip or conda, or use:
         wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz --no-check-certificate
         wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_val.tar --no-check-certificate
         wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_train.tar --no-check-certificate
-    Note that this may take upwards of **4 hours**, depending on your connection.
+    Note that this may take upwards of **4 hours**, depending on your connection. You may choose to download the validation set and the devkit files only and train on this smaller subset, in which case use the `--val_set` flag in the next step.
    
 2. Run the following to start pre-training (with the default settings used in the report, on a smaller subset of data):
 
         python main_pretrain.py \
             --config vit_4M_pretrain \
-            --batch_size 64 \
             --train_size 10000 \
-            --epochs 100 \
 
-   This will first extract the compressed ImageNet files, then start printing training statistics and save the model weights as a `.pth` file every epoch. Use the flag `--run_plots` to save reconstructions during training.
+   This will first extract the compressed ImageNet files, then start printing training statistics and save the model weights as a `.pth` file every epoch. Use the flag `--run_plots` to save reconstructions during training, and the `--val_set` flag to use the smaller (validation) set only, for quicker testing.
    
 ## Fine-Tuning on Oxford-IIIT Pets
 1. With the pre-trained encoder weights in the `/weights/` folder, run this command for fine-tuning, which will download the Oxford-IIIT Pets dataset and start training initialised with the weights given:
